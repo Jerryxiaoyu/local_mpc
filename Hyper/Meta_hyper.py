@@ -6,7 +6,7 @@ class VG(VariantGenerator):
     
     @variant
     def K(self):                  # num of datapoionts each batch during train model
-        return [32]
+        return [64]
     
     @variant
     def num_updates(self):              # num of update gradients
@@ -14,19 +14,19 @@ class VG(VariantGenerator):
     
     @variant
     def num_paths(self):              #   num of rollout each batch
-        return [10]
+        return [1]
 
     @variant
     def alpha(self):            #learning rate for inner loop
-        return [0.1]
+        return [0.1, 0.01,0.001]
     
     @variant
     def beta(self):         # learning rate for mata update
-        return [0.01]
+        return [0.1,0.01,0.001]
 
     @variant
     def batch_size(self):   # num of task
-        return [1000]
+        return [512]
 
     @variant
     def task(self):
@@ -36,13 +36,13 @@ class VG(VariantGenerator):
     def seed(self):
         return [1]
       
-exp_id = 1
+exp_id = 5
 
 env_name = 'HalfCheetahVaryingEnv-v0'
 
 # train prams
 task_range=(0.5,1.5)        # range of task distribution during train
-max_steps = 50              # num of itr during train
+max_steps = 500              # num of itr during train
 
 # test prams
 num_test_sample = 10    # num of task during test

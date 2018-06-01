@@ -5,6 +5,7 @@ from cost_functions import cheetah_cost_fn,ant_cost_fn,trajectory_cost_fn
 import time
 from controllers import MPCcontroller, RandomController
 import os
+import multiprocessing as mp
 
 CONFIG = {
 	'task':'varyingslope',
@@ -116,6 +117,20 @@ def sample(env,
 
 	return paths
 
+
+def sample_job(self,task):
+		task = task
+		paths = sample(self.env, task, self.controller, num_paths=self.num_paths_random,
+					   horizon=self.env_horizon,
+					   ignore_done=True)
+		data_x, data_y = self._data_process(paths)
+		data_x = data_x[np.newaxis, :]
+		data_y = data_y[np.newaxis, :]
+		return (data_x, data_y)
+
+
+
+	
 class dataset(object):
 	def __init__(self, env, K ):
 		# K for meta train, and another K for meta val
@@ -126,14 +141,19 @@ class dataset(object):
 		self.env=env
 		self.env_horizon = K
 
+
+	
 	def get_batch(self, batch_size,resample=False,  task=None, num_paths_random =10,  controller ='Rand' , task_range=(0,7), task_fun=np.random.randint):
 	
 		self.num_paths_random = num_paths_random
+		n_cpu =8
+		
+		
 		if controller =='Rand':
 			self.controller = RandomController(self.env)
 		elif controller == "MPC":
 			self.controller = MPCcontroller(self.env)
-	
+		
 		if resample:
 			# random sample
 			if task is None:
@@ -141,9 +161,24 @@ class dataset(object):
 			else:
 				learner_env_goals = task
 	
-			start = time.time()
+			# start = time.time()
+            #
 			
-			for i in range( batch_size):
+			# # multiprocess to get paths from tasks
+			# pool = mp.Pool(processes=n_cpu)
+			# multi_res = [pool.apply_async(sample_job, (self,goal,)) for goal in learner_env_goals]
+            #
+			# for i,  res in zip(range(len(multi_res)),multi_res):
+			# 	data = res.get()
+			# 	if i ==0:
+			# 		self.x = data[0]
+			# 		self.y = data[1]
+			# 	else:
+			# 		self.x = np.concatenate([self.x, data[0]],axis=0)
+			# 		self.y = np.concatenate([self.y, data[1]], axis=0)
+
+
+			for i in range(batch_size):
 				task = learner_env_goals[i]
 				paths = sample(self.env, task, self.controller, num_paths=self.num_paths_random,
 							   horizon=self.env_horizon,
@@ -152,16 +187,15 @@ class dataset(object):
 				data_x = data_x[np.newaxis, :]
 				data_y = data_y[np.newaxis, :]
 				
-				if i ==0:
+				if i == 0:
 					self.x = data_x
 					self.y = data_y
 				else:
-					self.x = np.concatenate([self.x,data_x],axis=0)
+					self.x = np.concatenate([self.x, data_x], axis=0)
 					self.y = np.concatenate([self.y, data_y], axis=0)
-
-
-			end = time.time()
-			runtime1 = end - start
+			# end = time.time()
+			# runtime1 = end - start
+			# print('time ', runtime1)
 		return self.x,self.y
  
 	def visualize(self, x, y,  y_pred, path):

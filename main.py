@@ -22,7 +22,7 @@ def argsparser():
 	parser.add_argument('--dataset', help='environment ID', choices=['sin,gym'],default='gym',
 						required=False)
 	# MAML
-	parser.add_argument('--K', type=int, default=32)  # horizon num_paths
+	parser.add_argument('--K', type=int, default=64)  # horizon num_paths
 	parser.add_argument('--num_paths', type=int, default=1)  # num_paths
 	parser.add_argument('--model_type', type=str, default='fc')
 	parser.add_argument('--loss_type', type=str, default='MSE')
@@ -37,7 +37,7 @@ def argsparser():
 	parser.add_argument('--max_steps', type=int, default=50)     # itr
 	parser.add_argument('--alpha', type=float, default=0.1)
 	parser.add_argument('--beta', type=float, default=0.01)
-	parser.add_argument('--batch_size', type=int, default=2000)
+	parser.add_argument('--batch_size', type=int, default=512)
 	# Test
 	parser.add_argument('--restore_checkpoint', type=str)
 	parser.add_argument('--restore_dir', type=str ,default='checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_100-shot_1-updates_10-batch_norm-batch_norm-EXP_test_pre1')
