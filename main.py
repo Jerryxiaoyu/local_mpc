@@ -13,6 +13,7 @@ from loginfo import log
 import time
 from controllers import MPCcontroller
 import ast
+from dataset.Gymdata import dataset
 
 def argsparser():
 	parser = argparse.ArgumentParser("Tensorflow Implementation of MAML")
@@ -22,25 +23,29 @@ def argsparser():
 	parser.add_argument('--dataset', help='environment ID', choices=['sin,gym'],default='gym',
 						required=False)
 	# MAML
-	parser.add_argument('--K', type=int, default=64)  # horizon num_paths
+	parser.add_argument('--K', type=int, default=32)  #
+	parser.add_argument('--M', type=int, default=32)  #
 	parser.add_argument('--num_paths', type=int, default=1)  # num_paths
+	parser.add_argument('--length_path', type=int, default=1000)  # num_paths
 	parser.add_argument('--model_type', type=str, default='fc')
 	parser.add_argument('--loss_type', type=str, default='MSE')
-	parser.add_argument('--num_updates', type=int, default=5)
+	parser.add_argument('--num_updates', type=int, default=1)
 	parser.add_argument('--norm', choices=['None', 'batch_norm'], default='batch_norm')
 	# Train
 	parser.add_argument('--is_train',  type=ast.literal_eval, default=True)
-	parser.add_argument('--is_PreTrain',  type=ast.literal_eval,default=True)
+	parser.add_argument('--is_PreTrain',  type=ast.literal_eval,default=False)
 	parser.add_argument('--task_range_up', type=float, default=1.5)    # 0.5 - 2.0    0-7
 	parser.add_argument('--task_range_down', type=float, default=0.5)
 	
-	parser.add_argument('--max_steps', type=int, default=50)     # itr
-	parser.add_argument('--alpha', type=float, default=0.1)
+	parser.add_argument('--max_epochs', type=int, default=50)     # itr
+	parser.add_argument('--alpha', type=float, default=0.01)
 	parser.add_argument('--beta', type=float, default=0.01)
-	parser.add_argument('--batch_size', type=int, default=512)
+	parser.add_argument('--batch_size', type=int, default=500)
+	parser.add_argument('--num_tasks', type=int, default=32)
+ 
 	# Test
 	parser.add_argument('--restore_checkpoint', type=str)
-	parser.add_argument('--restore_dir', type=str ,default='checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_100-shot_1-updates_10-batch_norm-batch_norm-EXP_test_pre1')
+	parser.add_argument('--restore_dir', type=str ,default='log-files/HalfCheetahVaryingEnv-v0/May-30_21:27:35Train_Model_EXP03/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_64-shot_5-updates_500-batch_norm-batch_norm-EXP_Train_Model_EXP03')
 	parser.add_argument('--num_test_sample', type=int, default=10)
 	parser.add_argument('--draw',   type=ast.literal_eval,default=False)
 	parser.add_argument('--test_tpye', type=str, default=None)  # None 'draw'
@@ -53,12 +58,6 @@ def argsparser():
 	return args
 
 
-def get_dataset(dataset_name,env, K_shots):
-	if dataset_name == 'gym':
-		from dataset.Gymdata import dataset
-	else:
-		ValueError("Invalid dataset")
-	return dataset(env,K_shots)
  
  
 def main(args):
@@ -78,9 +77,9 @@ def main(args):
 		print('env is error!!! ')
 
 	env = gym.make(env_name)
-
-	if args.dataset =='gym':
-		dataset = get_dataset(args.dataset, env, args.K)
+ 
+	
+	gym_dataset = dataset( env, args.length_path, args.num_tasks, args.num_paths,args.K,  args.M )
 
 	logdir = configure_log_dir(logname=env_name, txt=args.note)
 	# save args prameters
@@ -89,16 +88,17 @@ def main(args):
 		print(args, file=f)
 		
 	model = MAML(args.env_name,
-				 dataset,
+				 gym_dataset,
 				 args.model_type,
 				 args.loss_type,
-				 dataset.dim_input,
-				 dataset.dim_output,
+				 gym_dataset.dim_input,
+				 gym_dataset.dim_output,
 				 args.alpha,
 				 args.beta,
 				 args.K,
 				 args.num_paths,
 				 args.batch_size,
+	 
 				 args.is_train,
 				 args.num_updates,
 				 args.norm,
@@ -108,11 +108,14 @@ def main(args):
 				 logdir = logdir
 				 )
 	if args.is_train:
-		model.learn(args.batch_size, dataset, args.max_steps, is_PreTrain=args.is_PreTrain)
+		model.learn(args.batch_size,  gym_dataset, args.max_epochs, is_PreTrain=args.is_PreTrain)
+
+
 	
-	if args.test_tpye is None:
+	if args.test_tpye is not None:
 		if args.test_tpye == 'draw':
-			model.evaluate2(dataset, args.num_test_sample, args.draw, load_model=True, task_range=(args.test_range_down,args.test_range_up),
+			model.evaluate(gym_dataset, args.num_test_sample, args.draw, load_model=True,
+						   task_range=(args.test_range_down, args.test_range_up),
 						   restore_checkpoint=args.restore_checkpoint,
 						   restore_dir=args.restore_dir)
 

@@ -8,10 +8,10 @@ from loginfo import log
 from utils import *
 
 # global variables for MAML
-LOG_FREQ = 1
-SUMMARY_FREQ = 10
-SAVE_FREQ = 100
-EVAL_FREQ = 100
+LOG_FREQ = 10
+SUMMARY_FREQ = 1
+SAVE_FREQ = 5
+EVAL_FREQ = 1
 
 
 class MAML(object):
@@ -37,6 +37,7 @@ class MAML(object):
         self._dim_input = dim_input
         self._dim_output = dim_output
         self._batch_size = batch_size
+        
         self._num_updates = num_updates
         self._meta_optimizer = tf.train.AdamOptimizer(beta)
         self._avoid_second_derivative = False
@@ -75,7 +76,7 @@ class MAML(object):
 
         self.num_paths = num_paths
         #self.split_val = num_paths_random *env_horizon *0.8
-        self.split_val= int(self.num_paths*self._K*0.5)
+        #self.split_val= int(self.num_paths*self._K*0.5)
       
         self._sample_task_fun = sample_task_fun
         self._task_range = task_range
@@ -192,29 +193,47 @@ class MAML(object):
        # self._meta_val_loss_sum = tf.summary.scalar('loss/meta_val_loss', meta_val_loss)
         self._summary_op = tf.summary.merge_all()
 
-    def learn(self, batch_size, dataset, max_steps, is_PreTrain=False, **kwargs):
-        for step in range(int(max_steps)):
-            if is_PreTrain is True:
-                input_tensors = [self._pretrain_op, self._summary_op, self._meta_val_loss, self._meta_train_loss, self.total_loss1, self.total_losses2]
-            else:
-                input_tensors = [self._meta_train_op, self._summary_op, self._meta_val_loss, self._meta_train_loss, self.total_loss1, self.total_losses2]
+    def learn(self, batch_size,  dataset, max_epochs, is_PreTrain=False, **kwargs):
+        # collect data
+        dataset.get_dataset(resample=True, task=None, controller='Rand', task_range=self._task_range, task_fun= self._sample_task_fun)
+        train_loader,LengthOfData = dataset.get_batch( batch_size)
+        
+        if is_PreTrain is True:
+            input_tensors = [self._pretrain_op, self._summary_op, self._meta_val_loss, self._meta_train_loss, self.total_loss1, self.total_losses2]
+        else:
+            input_tensors = [self._meta_train_op, self._summary_op, self._meta_val_loss, self._meta_train_loss, self.total_loss1, self.total_losses2]
 
+        
+        for epoch in range(max_epochs):
+            for i in range( int(LengthOfData / batch_size)):
+                (batch_input, batch_target) = self._sess.run(train_loader)
     
-            meta_val_loss, meta_train_loss, summary_str = self._single_train_step(dataset, input_tensors,batch_size, step )
-            # Log/TF_board/Save/Evaluate
-            if step % SUMMARY_FREQ == 0:
-                self._writer.add_summary(summary_str, step)
-            if step % LOG_FREQ == 0:
-                log.info("Step: {}/{}, Meta train loss: {:.4f}, Meta val loss: {:.4f}".format(
-                    step, int(max_steps), meta_train_loss, meta_val_loss))
-            if step % SAVE_FREQ == 0:
-                log.infov("Save checkpoint-{}".format(step))
-                self._saver.save(self._sess, os.path.join(self._checkpoint_dir, 'checkpoint'),
-                                 global_step=step)
-            if step % EVAL_FREQ == 0:
-                self.evaluate(dataset, 10, False)
+                feed_dict = {self._meta_train_x: batch_input[:, :self._K, :],
+                             self._meta_train_y: batch_target[:, :self._K, :],
+                             self._meta_val_x: batch_input[:, self._K:, :],
+                             self._meta_val_y: batch_target[:, self._K:, :]}
+    
+                _, summary_str, meta_val_loss, meta_train_loss, meta_loss1, meta_losses2 = \
+                    self._sess.run(input_tensors, feed_dict)
 
-    def evaluate(self, dataset, test_steps, draw, load_model=False,task_range=(0,7),**kwargs):
+                if i % LOG_FREQ == 0:
+                    log.info("Epoch: {}/{} Step: {}/{}, Meta train loss: {:.4f}, Meta val loss: {:.4f}".format(
+                        epoch, max_epochs,i, int(LengthOfData / batch_size), meta_train_loss, meta_val_loss))
+                    
+            # Log/TF_board/Save/Evaluate
+            if epoch % SUMMARY_FREQ == 0:
+                self._writer.add_summary(summary_str, epoch)
+            # if epoch % LOG_FREQ == 0:
+            #     log.info("Step: {}/{}, Meta train loss: {:.4f}, Meta val loss: {:.4f}".format(
+            #         epoch, int(max_epochs), meta_train_loss, meta_val_loss))
+            if epoch % SAVE_FREQ == 0:
+                log.infov("Save checkpoint-{}".format(epoch))
+                self._saver.save(self._sess, os.path.join(self._checkpoint_dir, 'checkpoint'),
+                                 global_step=epoch)
+            if epoch % EVAL_FREQ == 0:
+                self.evaluate(dataset, 2, False)
+
+    def evaluate(self, dataset, test_steps, draw, load_model=False,task_range=(0,7),task_type='rand',**kwargs):
         if load_model:
             assert kwargs['restore_checkpoint'] is not None or \
                 kwargs['restore_dir'] is not None
@@ -228,14 +247,22 @@ class MAML(object):
         accumulated_val_loss = []
         accumulated_train_loss = []
         for step in tqdm(range(test_steps)):
-            task = self._sample_task_fun(task_range[0], task_range[1] ,(1,))
-            output, val_loss, train_loss, x ,y= self._single_test_step(dataset, 1, task=task)
+            if task_type =='rand':
+                task = self._sample_task_fun(task_range[0], task_range[1] ,(1,))
+            elif task_type =='lin':
+                task = np.array([0 + step * 0.05, ])
+            else:
+                print('please check task type!')
+         
+            output, val_loss, train_loss ,x, y = self._single_test_step( dataset, num_tasks=1, task=task)
+            
             if  load_model and draw:
                 # visualize one by one
-                draw_dir = os.path.join(self._logdir,'vis', self._task_name, 'exp_'+str(step)+'_task_num'+str(task[0])+'_loss'+str(val_loss))
+                draw_dir = os.path.join(self._logdir, 'vis', self._task_name,
+                                        'exp_' + str(step) + '_task_num' + str(task[0]) + '_loss' + str(val_loss))
                 if not os.path.exists(draw_dir):
                     os.makedirs(draw_dir)
-                dataset.visualize(x[:, self.split_val:, :], y[:, self.split_val:, :], output,
+                dataset.visualize(x[:, self._K:, :], y[:, self._K:, :], output,
                                   draw_dir)
 
             accumulated_val_loss.append(val_loss)
@@ -244,30 +271,45 @@ class MAML(object):
         train_loss_mean = sum(accumulated_train_loss)/test_steps
         log.infov("[Evaluate] Meta train loss: {:.4f}, Meta val loss: {:.4f}".format(
             train_loss_mean, val_loss_mean))
-
-    def _single_train_step(self, dataset,input_tensors, batch_size, step):
-        batch_input, batch_target  = dataset.get_batch(batch_size,  resample=True, num_paths_random =self.num_paths, task_range = self._task_range, task_fun =self._sample_task_fun)
-        feed_dict = {self._meta_train_x: batch_input[:, :self.split_val, :],
-                     self._meta_train_y: batch_target[:, :self.split_val, :],
-                     self._meta_val_x: batch_input[:, self.split_val:, :],
-                     self._meta_val_y: batch_target[:, self.split_val:, :]}
         
-        _, summary_str, meta_val_loss, meta_train_loss , meta_loss1, meta_losses2= \
+        
+
+    def _single_train_step(self,train_loader,input_tensors, batch_size ):
+        
+        
+        #batch_input, batch_target  = dataset.get_batch(batch_size,  resample=True, num_paths_random =self.num_paths, task_range = self._task_range, task_fun =self._sample_task_fun)
+        import math
+        for i in range(math.ceil(len(data_x) / batch_size)):
+            (batch_input, batch_target) = self._sess.run(train_loader)
+        
+            feed_dict = {self._meta_train_x: batch_input[:, :self.split_val, :],
+                         self._meta_train_y: batch_target[:, :self.split_val, :],
+                         self._meta_val_x: batch_input[:, self.split_val:, :],
+                         self._meta_val_y: batch_target[:, self.split_val:, :]}
+            
+            _, summary_str, meta_val_loss, meta_train_loss , meta_loss1, meta_losses2= \
             self._sess.run(input_tensors, feed_dict)
         return meta_val_loss, meta_train_loss, summary_str
 
 
-    def _single_test_step(self,dataset, batch_size, task=None):
-        batch_input, batch_target = dataset.get_batch(batch_size, resample=True, task=task, num_paths_random =self.num_paths, task_range = self._task_range, task_fun =self._sample_task_fun)
+    def _single_test_step(self,dataset, num_tasks, task=None):
+        
 
-        feed_dict = {self._meta_train_x: batch_input[:, :self.split_val, :],
-                     self._meta_train_y: batch_target[:, :self.split_val, :],
-                     self._meta_val_x: batch_input[:, self.split_val:, :],
-                     self._meta_val_y: batch_target[:, self.split_val:, :]}
+        test_loader, LengthOfData = dataset.get_test_batch(num_tasks=num_tasks, resample=True, task=task,
+
+                                                           task_range=self._task_range,
+                                                           task_fun=self._sample_task_fun)
+
+        (batch_input, batch_target) = self._sess.run(test_loader)
+        feed_dict = {self._meta_train_x: batch_input[:, :self._K, :],
+                     self._meta_train_y: batch_target[:, :self._K, :],
+                     self._meta_val_x: batch_input[:, self._K:, :],
+                     self._meta_val_y: batch_target[:, self._K:, :]}
         meta_val_output, meta_val_loss, meta_train_loss = \
             self._sess.run([self._meta_val_output, self._meta_val_loss,
                             self._meta_train_loss],
                            feed_dict)
+
         return meta_val_output, meta_val_loss, meta_train_loss, batch_input, batch_target
  
     def evaluate2(self, dataset, test_steps, draw, load_model=False,task_range=(0,7),**kwargs):
@@ -305,7 +347,7 @@ class MAML(object):
                     draw_dir = os.path.join(self._logdir,'vis', self._task_name, 'exp_'+str(step)+'_task_num'+str(task[0])+'_loss'+str(val_loss))
                     if not os.path.exists(draw_dir):
                         os.makedirs(draw_dir)
-                    dataset.visualize(x[:, self.split_val:, :], y[:, self.split_val:, :], output,
+                    dataset.visualize(x[:, self._K:, :], y[:, self._K:, :], output,
                                       draw_dir)
                 
                 accumulated_val_loss.append(val_loss)

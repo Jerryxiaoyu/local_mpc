@@ -6,6 +6,7 @@ import time
 from controllers import MPCcontroller, RandomController
 import os
 import multiprocessing as mp
+import tensorflow as tf
 
 CONFIG = {
 	'task':'varyingslope',
@@ -35,7 +36,8 @@ def sample(env,
 		   verbose=False,
 		   save_video=False,
 		   ignore_done=True,
-		   MPC=False
+		   MPC=False,
+		   K=32,M=32
 		   ):
 	"""
 		Write a sampler function which takes in an environment, a controller (either random or the MPC controller),
@@ -84,7 +86,7 @@ def sample(env,
 					print("Episode finished after {} timesteps".format(t + 1))
 					break
 			else:
-				if t >= horizon:
+				if t >= (horizon +K+M):
 					break
 
 		end = time.time()
@@ -117,6 +119,18 @@ def sample(env,
 
 	return paths
 
+# # multiprocess to get paths from tasks
+# pool = mp.Pool(processes=n_cpu)
+# multi_res = [pool.apply_async(sample_job, (self,goal,)) for goal in learner_env_goals]
+#
+# for i,  res in zip(range(len(multi_res)),multi_res):
+# 	data = res.get()
+# 	if i ==0:
+# 		self.x = data[0]
+# 		self.y = data[1]
+# 	else:
+# 		self.x = np.concatenate([self.x, data[0]],axis=0)
+# 		self.y = np.concatenate([self.y, data[1]], axis=0)
 
 def sample_job(self,task):
 		task = task
@@ -132,57 +146,62 @@ def sample_job(self,task):
 
 	
 class dataset(object):
-	def __init__(self, env, K ):
+	def __init__(self, env, env_horizon ,num_tasks,num_paths_random, K, M):
 		# K for meta train, and another K for meta val
 		
 		self.dim_input = 26
 		self.dim_output = 20
 		self.name = 'gym'
 		self.env=env
-		self.env_horizon = K
+		self.env_horizon = env_horizon
 
 
-	
-	def get_batch(self, batch_size,resample=False,  task=None, num_paths_random =10,  controller ='Rand' , task_range=(0,7), task_fun=np.random.randint):
-	
+		self.num_tasks =num_tasks
 		self.num_paths_random = num_paths_random
-		n_cpu =8
+
+		self.K =K
+		self.M =M
+
+	
+	def get_batch(self, batch_size ):
+	
+		data_x, data_y = [], []
+		for t in range(self.num_tasks):
+			for h in range(self.env_horizon  ):
+				data_x.append(self.x[t, h:(h + self.K + self.M), :])
+				data_y.append(self.y[t, h:(h + self.K + self.M), :])
+		data_x = np.array(data_x)
+		data_y = np.array(data_y)
+	
+		dataset = tf.data.Dataset.from_tensor_slices((data_x, data_y)).shuffle(buffer_size=self.env_horizon * self.num_tasks).batch(
+			batch_size).repeat()
+		# create the iterator
+		iter = dataset.make_one_shot_iterator()
+	
+		iterator = iter.get_next()
 		
+		return 	iterator, len(data_x)
+
 		
-		if controller =='Rand':
+	def get_dataset(self, resample=False,  task=None,   controller ='Rand' , task_range=(0,7), task_fun=np.random.randint):
+		
+		if controller == 'Rand':
 			self.controller = RandomController(self.env)
 		elif controller == "MPC":
 			self.controller = MPCcontroller(self.env)
-		
+	
 		if resample:
 			# random sample
 			if task is None:
-				learner_env_goals = sample_goals(batch_size, task_range, task_fun)
+				learner_env_goals = sample_goals(self.num_tasks, task_range, task_fun)
 			else:
 				learner_env_goals = task
-	
-			# start = time.time()
-            #
 			
-			# # multiprocess to get paths from tasks
-			# pool = mp.Pool(processes=n_cpu)
-			# multi_res = [pool.apply_async(sample_job, (self,goal,)) for goal in learner_env_goals]
-            #
-			# for i,  res in zip(range(len(multi_res)),multi_res):
-			# 	data = res.get()
-			# 	if i ==0:
-			# 		self.x = data[0]
-			# 		self.y = data[1]
-			# 	else:
-			# 		self.x = np.concatenate([self.x, data[0]],axis=0)
-			# 		self.y = np.concatenate([self.y, data[1]], axis=0)
-
-
-			for i in range(batch_size):
+			for i in range(self.num_tasks):
 				task = learner_env_goals[i]
 				paths = sample(self.env, task, self.controller, num_paths=self.num_paths_random,
 							   horizon=self.env_horizon,
-							   ignore_done=True)  # 10
+							   ignore_done=True, K=self.K, M=self.M)  # 10
 				data_x, data_y = self._data_process(paths)
 				data_x = data_x[np.newaxis, :]
 				data_y = data_y[np.newaxis, :]
@@ -193,19 +212,68 @@ class dataset(object):
 				else:
 					self.x = np.concatenate([self.x, data_x], axis=0)
 					self.y = np.concatenate([self.y, data_y], axis=0)
-			# end = time.time()
-			# runtime1 = end - start
-			# print('time ', runtime1)
-		return self.x,self.y
- 
+		# end = time.time()
+		# runtime1 = end - start
+		# print('time ', runtime1)
+		print('env_horizon:', self.env_horizon)
+		print('len of x:', len(self.x))
+		return len(self.x)
+	def get_test_batch(self,num_tasks,resample=False,  task=None,   controller ='Rand' , task_range=(0,7), task_fun=np.random.randint):
+		
+		if controller == 'Rand':
+			self.controller = RandomController(self.env)
+		elif controller == "MPC":
+			self.controller = MPCcontroller(self.env)
+		
+		if resample:
+			# random sample
+			if task is None:
+				learner_env_goals = sample_goals(num_tasks, task_range, task_fun)
+			else:
+				learner_env_goals = task
+			
+			for i in range(num_tasks):
+				task = learner_env_goals[i]
+				paths = sample(self.env, task, self.controller, num_paths=self.num_paths_random,
+							   horizon=self.env_horizon,
+							   ignore_done=True, K=self.K, M=self.M)  # 10
+				data_x, data_y = self._data_process(paths)
+				data_x = data_x[np.newaxis, :]
+				data_y = data_y[np.newaxis, :]
+				
+				if i == 0:
+					x = data_x
+					y = data_y
+				else:
+					x = np.concatenate([x, data_x], axis=0)
+					y = np.concatenate([y, data_y], axis=0)
+
+
+		data_x, data_y = [], []
+		for t in range(num_tasks):
+			for h in range(self.env_horizon):
+				data_x.append(x[t, h:(h + self.K + self.M), :])
+				data_y.append(y[t, h:(h + self.K + self.M), :])
+		data_x = np.array(data_x)
+		data_y = np.array(data_y)
+		
+		dataset = tf.data.Dataset.from_tensor_slices((data_x, data_y)).shuffle(
+			buffer_size=self.env_horizon * self.num_tasks).batch(
+            self.env_horizon).repeat()
+		# create the iterator
+		iter = dataset.make_one_shot_iterator()
+		
+		iterator = iter.get_next()
+	
+		return iterator, len(data_x)
+	
 	def visualize(self, x, y,  y_pred, path):
 		horizon = 100
-		dim_x = 26
-		dim_y = 20
+		
   
-		x = x.reshape(-1, dim_x)
-		y_pred = y_pred.reshape(-1, dim_y)
-		y_actual = y.reshape(-1, dim_y)
+		x = x.reshape(-1, self.dim_input)
+		y_pred = y_pred.reshape(-1, self.dim_output)
+		y_actual = y.reshape(-1, self.dim_output)
 
 		state_name = ['s1-qpos1', 's2-qpos2', 's3-qpos3', 's4-qpos4', 's5-qpos5', 's6-qpos6', 's7-qpos7', 's8-qpos8',
 					  's9-qvel0', 's10-qvel1', 's11-qvel2', 's12-qvel3	', 's13-qvel4', 's14-qvel5', 's15-qvel6', 's16-qvel7',
@@ -213,7 +281,7 @@ class dataset(object):
 		LengthOfCurve = 100  # the Length of Horizon in a curve
 		
 		t = range(LengthOfCurve)
-		for i in range(dim_y):
+		for i in range(self.dim_output):
 			plt.figure()
 			plt.plot(t, y_pred[0:LengthOfCurve, i], label="$predict$")
 			plt.plot(t, y_actual[0:LengthOfCurve:, i], label="$Actual$")

@@ -22,13 +22,13 @@ from my_envs.mujoco.half_cheetah_VaryingEnv import HalfCheetahVaryingEnv
 register(
     id='HalfCheetahEnvDisableEnv-v0',
     entry_point='my_envs.mujoco:HalfCheetahEnvRandDisable',
-    max_episode_steps=1000,
+    max_episode_steps=2000,
     reward_threshold=4800.0,
 )
 
 register(
     id='HalfCheetahVaryingEnv-v0',
     entry_point='my_envs.mujoco:HalfCheetahVaryingEnv',
-    max_episode_steps=1000,
+    max_episode_steps=2000,
     reward_threshold=4800.0,
 )

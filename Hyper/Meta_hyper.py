@@ -6,7 +6,7 @@ class VG(VariantGenerator):
     
     @variant
     def K(self):                  # num of datapoionts each batch during train model
-        return [64]
+        return [32]
     
     @variant
     def num_updates(self):              # num of update gradients
@@ -18,15 +18,15 @@ class VG(VariantGenerator):
 
     @variant
     def alpha(self):            #learning rate for inner loop
-        return [0.1, 0.01,0.001]
+        return [0.01,0.1]
     
     @variant
     def beta(self):         # learning rate for mata update
-        return [0.1,0.01,0.001]
+        return [0.01,0.1]
 
     @variant
     def batch_size(self):   # num of task
-        return [512]
+        return [500]
 
     @variant
     def task(self):
@@ -36,20 +36,21 @@ class VG(VariantGenerator):
     def seed(self):
         return [1]
       
-exp_id = 5
+exp_id = 1
 
 env_name = 'HalfCheetahVaryingEnv-v0'
 
 # train prams
 task_range=(0.5,1.5)        # range of task distribution during train
-max_steps = 500              # num of itr during train
+max_epochs = 50              # num of itr during train
 
 # test prams
 num_test_sample = 10    # num of task during test
 test_range =(0.1,3.0) # range of task distribution during test
 restore_dir ='../checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_100-shot_1-updates_10-batch_norm-batch_norm-EXP_test_pre1'
-
-
+length_path =1000
+num_tasks =32
+M =32
 variants = VG().variants()
 
 for v in variants:
@@ -92,22 +93,25 @@ for v in variants:
               " --seed " + str(seed) +
               " --env_name "        + env_name +
               " --K "               + str(K) +
+              " --M "               + str(M) +
               " --num_paths "       + str(num_paths) +
+              " --length_path "     + str(length_path) +
               " --num_updates "     + str(num_updates) +
-              " --task_range_down "      + str(task_range[0]) +
-              " --task_range_up "      + str(task_range[1]) +
-              " --max_steps "       + str(max_steps) +
+              " --task_range_down " + str(task_range[0]) +
+              " --task_range_up "   + str(task_range[1]) +
+              " --max_epochs "      + str(max_epochs) +
               " --alpha "           + str(alpha) +
               " --beta "            + str(beta) +
               " --batch_size "      + str(batch_size) +
+              " --num_tasks "       + str(num_tasks) +
               " --is_train "        + str(is_train) +
               " --is_PreTrain "     + str(is_PreTrain) +
               " --restore_dir "     + str(restore_dir)+
               " --num_test_sample " + str(num_test_sample) +
               " --draw "            + str(draw) +
               " --test_tpye "       + str(test_tpye) +
-              " --test_range_down "      + str(test_range[0]) +
-              " --test_range_up "      + str(test_range[1]) +
+              " --test_range_down " + str(test_range[0]) +
+              " --test_range_up "   + str(test_range[1]) +
               " --note "            + note
               )
      
