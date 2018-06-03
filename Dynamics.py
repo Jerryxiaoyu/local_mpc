@@ -152,7 +152,7 @@ class Dynamics(object):
            # print('pre \nweight[w1] ', self._weights['w1'].eval(session=self._sess))
             _, summary_str, meta_train_loss = \
                 self._sess.run([self._meta_train_op, self._summary_op, self._meta_train_loss,], feed_dict)
-
+            return meta_train_loss
        # print('post \nweight[w1] ', self._weights['w1'].eval(session=self._sess))
         
 

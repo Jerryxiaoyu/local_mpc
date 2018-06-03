@@ -10,7 +10,7 @@ from utils import *
 # global variables for MAML
 LOG_FREQ = 10
 SUMMARY_FREQ = 1
-SAVE_FREQ = 5
+SAVE_FREQ = 10
 EVAL_FREQ = 1
 
 
@@ -196,16 +196,28 @@ class MAML(object):
     def learn(self, batch_size,  dataset, max_epochs, is_PreTrain=False, **kwargs):
         # collect data
         dataset.get_dataset(resample=True, task=None, controller='Rand', task_range=self._task_range, task_fun= self._sample_task_fun)
-        train_loader,LengthOfData = dataset.get_batch( batch_size)
+        data_x, data_y,LengthOfData = dataset.get_batch( batch_size)
+        
+        # load data
+        data_x_placeholder = tf.placeholder(tf.float32, data_x.shape)
+        data_y_placeholder = tf.placeholder(tf.float32, data_y.shape)
+        dataset_tf = tf.data.Dataset.from_tensor_slices((data_x_placeholder, data_y_placeholder)).shuffle(
+            buffer_size=10000).batch(batch_size).repeat()
+        # create data iterator
+        iter = dataset_tf.make_initializable_iterator()  # dataset.make_one_shot_iterator()
+        train_loader = iter.get_next()
+        # init data
+        self._sess.run(iter.initializer, feed_dict={data_x_placeholder: data_x, data_y_placeholder:data_y})
+
+        logger = Logger(self._logdir, csvname='log_loss')
         
         if is_PreTrain is True:
             input_tensors = [self._pretrain_op, self._summary_op, self._meta_val_loss, self._meta_train_loss, self.total_loss1, self.total_losses2]
         else:
             input_tensors = [self._meta_train_op, self._summary_op, self._meta_val_loss, self._meta_train_loss, self.total_loss1, self.total_losses2]
-
-        
         for epoch in range(max_epochs):
             for i in range( int(LengthOfData / batch_size)):
+                
                 (batch_input, batch_target) = self._sess.run(train_loader)
     
                 feed_dict = {self._meta_train_x: batch_input[:, :self._K, :],
@@ -226,12 +238,26 @@ class MAML(object):
             # if epoch % LOG_FREQ == 0:
             #     log.info("Step: {}/{}, Meta train loss: {:.4f}, Meta val loss: {:.4f}".format(
             #         epoch, int(max_epochs), meta_train_loss, meta_val_loss))
-            if epoch % SAVE_FREQ == 0:
+            
+            
+            if (epoch+1) % SAVE_FREQ == 0:
                 log.infov("Save checkpoint-{}".format(epoch))
                 self._saver.save(self._sess, os.path.join(self._checkpoint_dir, 'checkpoint'),
                                  global_step=epoch)
-            if epoch % EVAL_FREQ == 0:
-                self.evaluate(dataset, 2, False)
+            if (epoch+1) % EVAL_FREQ == 0:
+                train_loss_mean, val_loss_mean = self.evaluate(dataset, 2, False, task_range=self._task_range)
+                logger.log({'epoch': epoch,
+                            'meta_val_loss': meta_val_loss,
+                            'meta_train_loss':meta_train_loss,
+                            'meta_loss1':meta_loss1,
+                            'meta_loss2':meta_losses2,
+                            'val_tain_loss_mean':train_loss_mean,
+                            'val_val_loss_mean':val_loss_mean,
+                            
+                            })
+                logger.write(display=False)
+        #close logger
+        logger.close()
 
     def evaluate(self, dataset, test_steps, draw, load_model=False,task_range=(0,7),task_type='rand',**kwargs):
         if load_model:
@@ -271,7 +297,7 @@ class MAML(object):
         train_loss_mean = sum(accumulated_train_loss)/test_steps
         log.infov("[Evaluate] Meta train loss: {:.4f}, Meta val loss: {:.4f}".format(
             train_loss_mean, val_loss_mean))
-        
+        return train_loss_mean, val_loss_mean
         
 
     def _single_train_step(self,train_loader,input_tensors, batch_size ):
@@ -293,14 +319,13 @@ class MAML(object):
 
 
     def _single_test_step(self,dataset, num_tasks, task=None):
-        
-
-        test_loader, LengthOfData = dataset.get_test_batch(num_tasks=num_tasks, resample=True, task=task,
+    
+        batch_input, batch_target = dataset.get_test_batch(num_tasks=num_tasks, resample=True, task=task,
 
                                                            task_range=self._task_range,
                                                            task_fun=self._sample_task_fun)
 
-        (batch_input, batch_target) = self._sess.run(test_loader)
+        #(batch_input, batch_target) = self._sess.run(test_loader)
         feed_dict = {self._meta_train_x: batch_input[:, :self._K, :],
                      self._meta_train_y: batch_target[:, :self._K, :],
                      self._meta_val_x: batch_input[:, self._K:, :],

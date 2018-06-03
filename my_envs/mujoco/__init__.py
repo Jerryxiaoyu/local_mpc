@@ -18,6 +18,8 @@ from gym.envs.mujoco.striker import StrikerEnv
 from gym.envs.registration import registry, register, make, spec
 from my_envs.mujoco.half_cheetah_DisableEnv import HalfCheetahEnvRandDisable
 from my_envs.mujoco.half_cheetah_VaryingEnv import HalfCheetahVaryingEnv
+from my_envs.mujoco.ant_DisableEnv import AntEnvRandDisable
+
 
 register(
     id='HalfCheetahEnvDisableEnv-v0',
@@ -31,4 +33,11 @@ register(
     entry_point='my_envs.mujoco:HalfCheetahVaryingEnv',
     max_episode_steps=2000,
     reward_threshold=4800.0,
+)
+
+register(
+    id='AntDisableEnv-v0',
+    entry_point='my_envs.mujoco:AntEnvRandDisable',
+    max_episode_steps=2000,
+    reward_threshold=6000.0,
 )

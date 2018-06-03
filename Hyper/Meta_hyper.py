@@ -18,11 +18,11 @@ class VG(VariantGenerator):
 
     @variant
     def alpha(self):            #learning rate for inner loop
-        return [0.01,0.1]
+        return [0.01,0.001]
     
     @variant
     def beta(self):         # learning rate for mata update
-        return [0.01,0.1]
+        return [0.01]
 
     @variant
     def batch_size(self):   # num of task
@@ -38,7 +38,7 @@ class VG(VariantGenerator):
       
 exp_id = 1
 
-env_name = 'HalfCheetahVaryingEnv-v0'
+env_name = 'AntDisableEnv-v0'
 
 # train prams
 task_range=(0.5,1.5)        # range of task distribution during train
@@ -53,7 +53,9 @@ num_tasks =32
 M =32
 variants = VG().variants()
 
+i=0
 for v in variants:
+    i +=1
     print(v)
     seed = v['seed']
 
@@ -114,4 +116,31 @@ for v in variants:
               " --test_range_up "   + str(test_range[1]) +
               " --note "            + note
               )
-     
+    
+    # command = "nohup python3 - u  ../main.py "+\
+    #           " --seed " + str(seed) +\
+    #           " --env_name "        + env_name +\
+    #           " --K "               + str(K) +\
+    #           " --M "               + str(M) +\
+    #           " --num_paths "       + str(num_paths) +\
+    #           " --length_path "     + str(length_path) +\
+    #           " --num_updates "     + str(num_updates) +\
+    #           " --task_range_down " + str(task_range[0]) +\
+    #           " --task_range_up "   + str(task_range[1]) +\
+    #           " --max_epochs "      + str(max_epochs) +\
+    #           " --alpha "           + str(alpha) +\
+    #           " --beta "            + str(beta) +\
+    #           " --batch_size "      + str(batch_size) +\
+    #           " --num_tasks "       + str(num_tasks) +\
+    #           " --is_train "        + str(is_train) +\
+    #           " --is_PreTrain "     + str(is_PreTrain) +\
+    #           " --restore_dir "     + str(restore_dir)+\
+    #           " --num_test_sample " + str(num_test_sample) +\
+    #           " --draw "            + str(draw) +\
+    #           " --test_tpye "       + str(test_tpye) +\
+    #           " --test_range_down " + str(test_range[0]) +\
+    #           " --test_range_up "   + str(test_range[1]) +\
+    #           " --note "            + note + \
+    #           " >v00"+str(i)+".log 2>& 1 &"
+    #
+    # os.system(command)

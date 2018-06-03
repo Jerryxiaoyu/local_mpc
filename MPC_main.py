@@ -14,6 +14,7 @@ from loginfo import log
 import time
 from controllers import MPCcontroller
 from utils import configure_log_dir, Logger
+from dataset.Gymdata import dataset
 
 def argsparser():
     parser = argparse.ArgumentParser("Tensorflow Implementation of MAML")
@@ -24,8 +25,8 @@ def argsparser():
     parser.add_argument('--dataset', help='environment ID', choices=['sin,gym'], default='gym',
                         required=False)
     # MAML
-    parser.add_argument('--K', type=int, default=100)  # horizon num_paths
-    parser.add_argument('--num_paths', type=int, default=10)  # num_paths
+    parser.add_argument('--K', type=int, default=32)  # horizon num_paths
+    parser.add_argument('--num_paths', type=int, default=1)  # num_paths
     parser.add_argument('--model_type', type=str, default='fc')
     parser.add_argument('--loss_type', type=str, default='MSE')
     parser.add_argument('--num_updates', type=int, default=1)
@@ -37,29 +38,23 @@ def argsparser():
     # Test
     parser.add_argument('--restore_checkpoint', type=str)
     parser.add_argument('--restore_dir', type=str,
-                        default='log-files/HalfCheetahVaryingEnv-v0/May-29_15:30:31Train_Model_EXP01/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_10-shot_5-updates_8-batch_norm-batch_norm-EXP_Train_Model_EXP01')
+                        default='Hyper/log-files/HalfCheetahVaryingEnv-v0/Jun-03_18:39:46Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_32-shot_1-updates_500-batch_norm-batch_norm-EXP_Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1')
 
-    parser.add_argument('--NumOfExp', type=int, default=100)
+    parser.add_argument('--NumOfExp', type=int, default=32)
     parser.add_argument('--horizon',  type=int, default=1000)
     parser.add_argument('--num_itr', type=int, default=5)
-    parser.add_argument('--task_goal', type=float, default=1)
+    parser.add_argument('--task_goal', type=float, default=1.0)
     
     # MPC Controller
     parser.add_argument('--mpc_horizon', '-m', type=int, default=5)  # mpc simulation H  10
-    parser.add_argument('--simulated_paths', '-sp', type=int, default=3000)  # mpc  candidate  K 10000
+    parser.add_argument('--simulated_paths', '-sp', type=int, default=1000)  # mpc  candidate  K 10000
     
     parser.add_argument('--note', type=str, default='Control_MPC_EXP02')
     args = parser.parse_args()
     print(args)
     return args
 
-
-def get_dataset(dataset_name, env, K_shots):
-    if dataset_name == 'gym':
-        from dataset.Gymdata import dataset
-    else:
-        ValueError("Invalid dataset")
-    return dataset(env, K_shots)
+ 
 
 def rollout(env,
             controller,
@@ -83,7 +78,7 @@ def rollout(env,
     
     """ YOUR CODE HERE """
     obs = env.reset(reset_args=task_goal)
-    observations, actions, next_observations, rewards = [], [], [], []
+    observations, actions, next_observations, rewards ,meta_train_losses= [], [], [], [],[]
     done = False
     t = 0
     
@@ -93,7 +88,9 @@ def rollout(env,
         if render:
             env.render()
         obs = obs.astype(np.float64).reshape((1, -1))
-        dyn_model.update(experiences)
+        meta_train_loss = dyn_model.update(experiences)
+        if meta_train_loss is not None:
+            meta_train_losses.append(meta_train_loss)
         start = time.time()
         action = controller.get_action5(dyn_model, obs)  # highly time-consuming
         action = action.astype(np.float64).reshape((1, -1))
@@ -132,7 +129,8 @@ def rollout(env,
     end = time.time()
     runtime1 = end - start
     
-    return sum(rewards)/horizon
+    
+    return sum(rewards)/horizon, sum(meta_train_losses)/horizon
 
  
 def main(args):
@@ -152,8 +150,8 @@ def main(args):
         print('env is error!!! ')
     
     env = gym.make(env_name)
-    if args.dataset == 'gym':
-        dataset = get_dataset(args.dataset, env, args.K)
+    dim_input = env.observation_space.shape[0]+env.action_space.shape[0]
+    dim_output = env.observation_space.shape[0]
 
     logdir = configure_log_dir(logname=env_name, txt=args.note)
     # save args prameters
@@ -170,8 +168,8 @@ def main(args):
                  args.NumOfExp,
                  args.model_type,
                  args.loss_type,
-                 dataset.dim_input,
-                 dataset.dim_output,
+                 dim_input,
+                 dim_output,
                  beta = args.beta,#args.beta,
                  is_train =args.is_train,
                  norm = args.norm,
@@ -187,21 +185,28 @@ def main(args):
                                    cost_fn=cost_fn,
                                    num_simulated_paths=num_simulated_paths,
                                    )
+    logger = Logger(logdir, csvname='log')
+    
     num_itr = args.num_itr
     experiences,costs =[],[]
     print('MPC is beginning...' )
     for itr in range(num_itr):
-        cost = rollout(env, mpc_controller, task_goal = args.task_goal,
+        cost, model_loss_mean = rollout(env, mpc_controller, task_goal = args.task_goal,
                        dyn_model=dyn_model,experiences=experiences, NumOfExp= args.NumOfExp,horizon=args.horizon, cost_fn=cheetah_cost_fn,
                 render=False, verbose=False, save_video=False, ignore_done=True, )
         
-        print(time.asctime( time.localtime(time.time()) ), ' itr :', itr, 'Average reward :' , cost)
-        costs.append(cost)
+        #print(time.asctime( time.localtime(time.time()) ), ' itr :', itr, 'Average reward :' , cost)
+        log.infov("Itr {}/{} Average cost: {:.4f}  Model loss mean:{:.4f}".format(itr, num_itr,cost, model_loss_mean))
+
+        logger.log({'itr': itr,
+                    'Average cost': cost,
+                    'Model loss mean': model_loss_mean,
+                    })
     
     print('MPC is over....')
-    logger = Logger(logdir, csvname='log')
-    data = np.array(costs)
-    logger.log_table2csv(data)
+    
+    
+    logger.write(display=False)
     
 if __name__ == '__main__':
     args = argsparser()

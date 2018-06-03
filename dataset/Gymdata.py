@@ -88,6 +88,9 @@ def sample(env,
 			else:
 				if t >= (horizon +K+M):
 					break
+				else:
+					done =False
+
 
 		end = time.time()
 		runtime1 = end - start
@@ -148,9 +151,9 @@ def sample_job(self,task):
 class dataset(object):
 	def __init__(self, env, env_horizon ,num_tasks,num_paths_random, K, M):
 		# K for meta train, and another K for meta val
-		
-		self.dim_input = 26
-		self.dim_output = 20
+	
+		self.dim_input = env.observation_space.shape[0] + env.action_space.shape[0]
+		self.dim_output = env.observation_space.shape[0]
 		self.name = 'gym'
 		self.env=env
 		self.env_horizon = env_horizon
@@ -173,14 +176,16 @@ class dataset(object):
 		data_x = np.array(data_x)
 		data_y = np.array(data_y)
 	
-		dataset = tf.data.Dataset.from_tensor_slices((data_x, data_y)).shuffle(buffer_size=self.env_horizon * self.num_tasks).batch(
-			batch_size).repeat()
-		# create the iterator
-		iter = dataset.make_one_shot_iterator()
-	
-		iterator = iter.get_next()
-		
-		return 	iterator, len(data_x)
+		# data_x_placeholder = tf.placeholder(tf.float32, data_x.shape)
+		# data_y_placeholder = tf.placeholder(tf.float32, data_y.shape)
+		# dataset = tf.data.Dataset.from_tensor_slices((data_x_placeholder, data_y_placeholder)).shuffle(buffer_size=self.env_horizon * self.num_tasks).batch(
+		# 	batch_size).repeat()
+		# # create the iterator
+		# iter = dataset.make_initializable_iterator() #dataset.make_one_shot_iterator()
+		#
+		# dataloader = iter.get_next()
+  
+		return 	  data_x, data_y,len(data_x)
 
 		
 	def get_dataset(self, resample=False,  task=None,   controller ='Rand' , task_range=(0,7), task_fun=np.random.randint):
@@ -257,15 +262,15 @@ class dataset(object):
 		data_x = np.array(data_x)
 		data_y = np.array(data_y)
 		
-		dataset = tf.data.Dataset.from_tensor_slices((data_x, data_y)).shuffle(
-			buffer_size=self.env_horizon * self.num_tasks).batch(
-            self.env_horizon).repeat()
-		# create the iterator
-		iter = dataset.make_one_shot_iterator()
-		
-		iterator = iter.get_next()
+		# dataset = tf.data.Dataset.from_tensor_slices((data_x, data_y)).shuffle(
+		# 	buffer_size=self.env_horizon * self.num_tasks).batch(
+		# 	self.env_horizon).repeat()
+		# # create the iterator
+		# iter = dataset.make_one_shot_iterator()
+		#
+		# iterator = iter.get_next()
 	
-		return iterator, len(data_x)
+		return data_x,data_y
 	
 	def visualize(self, x, y,  y_pred, path):
 		horizon = 100

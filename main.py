@@ -18,7 +18,7 @@ from dataset.Gymdata import dataset
 def argsparser():
 	parser = argparse.ArgumentParser("Tensorflow Implementation of MAML")
 	parser.add_argument('--seed', type=int, default=1)
-	parser.add_argument('--env_name', type=str, default='HalfCheetahVaryingEnv-v0')  # HalfCheetahEnvDisableEnv   HalfCheetahVaryingEnv
+	parser.add_argument('--env_name', type=str, default='AntDisableEnv-v0')  # HalfCheetahEnvDisableEnv   HalfCheetahVaryingEnv
 	# Dataset
 	parser.add_argument('--dataset', help='environment ID', choices=['sin,gym'],default='gym',
 						required=False)
@@ -34,8 +34,8 @@ def argsparser():
 	# Train
 	parser.add_argument('--is_train',  type=ast.literal_eval, default=True)
 	parser.add_argument('--is_PreTrain',  type=ast.literal_eval,default=False)
-	parser.add_argument('--task_range_up', type=float, default=1.5)    # 0.5 - 2.0    0-7
-	parser.add_argument('--task_range_down', type=float, default=0.5)
+	parser.add_argument('--task_range_up', type=float, default=4)    # 0.5 - 2.0    0-7
+	parser.add_argument('--task_range_down', type=float, default=0)
 	
 	parser.add_argument('--max_epochs', type=int, default=50)     # itr
 	parser.add_argument('--alpha', type=float, default=0.01)
@@ -73,6 +73,10 @@ def main(args):
 	elif args.env_name=='HalfCheetahVaryingEnv-v0':
 		cost_fn = cheetah_cost_fn
 		sample_task_fun = np.random.uniform
+
+	elif args.env_name == 'AntDisableEnv-v0':
+		cost_fn = ant_cost_fn
+		sample_task_fun = np.random.randint
 	else:
 		print('env is error!!! ')
 
