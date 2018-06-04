@@ -293,9 +293,9 @@ class dataset(object):
 			
 			plt.xlabel("step")
 			
-			plt.title("Prediction of the state: " + state_name[i])
+			plt.title("Prediction of the state: s" + str(i+1))  #state_name[i]
 			plt.legend()
-			plt.savefig(os.path.join(path, state_name[i]+'_{}.png'.format(i)))
+			plt.savefig(os.path.join(path, 'state'+'{}.png'.format(i+1)))
 			plt.close()
    
 	def _data_process(self,paths):

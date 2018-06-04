@@ -96,7 +96,8 @@ class MAML(object):
 
     def _get_loss_fn(self, loss_type):
         if loss_type == 'MSE':
-            loss_fn = tf.losses.mean_squared_error
+            loss_fn = tf.losses.mean_squared_error   #log_loss
+            #loss_fn = tf.losses.log_loss
         else:
             ValueError("Can't recognize the loss type {}".format(loss_type))
         return loss_fn
@@ -259,7 +260,7 @@ class MAML(object):
         #close logger
         logger.close()
 
-    def evaluate(self, dataset, test_steps, draw, load_model=False,task_range=(0,7),task_type='rand',**kwargs):
+    def evaluate(self, dataset, test_steps, draw, load_model=False,task_range=(0,7),task_type='rand', **kwargs):
         if load_model:
             assert kwargs['restore_checkpoint'] is not None or \
                 kwargs['restore_dir'] is not None
@@ -269,8 +270,9 @@ class MAML(object):
                 restore_checkpoint = kwargs['restore_checkpoint']
             self._saver.restore(self._sess, restore_checkpoint)
             log.infov('Load model: {}'.format(restore_checkpoint))
-
-        accumulated_val_loss = []
+           
+        tasks =[]
+        accumulated_val_loss,accumulated_val_loss_post = [],[]
         accumulated_train_loss = []
         for step in tqdm(range(test_steps)):
             if task_type =='rand':
@@ -280,7 +282,7 @@ class MAML(object):
             else:
                 print('please check task type!')
          
-            output, val_loss, train_loss ,x, y = self._single_test_step( dataset, num_tasks=1, task=task)
+            output, val_loss, train_loss ,x, y  = self._single_test_step( dataset, num_tasks=1, task=task)
             
             if  load_model and draw:
                 # visualize one by one
@@ -292,11 +294,24 @@ class MAML(object):
                                   draw_dir)
 
             accumulated_val_loss.append(val_loss)
+            
             accumulated_train_loss.append(train_loss)
+            tasks.append(task)
         val_loss_mean = sum(accumulated_val_loss)/test_steps
         train_loss_mean = sum(accumulated_train_loss)/test_steps
         log.infov("[Evaluate] Meta train loss: {:.4f}, Meta val loss: {:.4f}".format(
             train_loss_mean, val_loss_mean))
+        if load_model:
+            logger = Logger(self._logdir, csvname='log_test_loss')
+            for i in range(test_steps):
+                logger.log({'num': i,
+                            'task':tasks[i][0],
+                            'val_loss': accumulated_val_loss[i],
+                            'train_loss': accumulated_train_loss[i],
+                            
+                            })
+                logger.write(display=False)
+            logger.close()
         return train_loss_mean, val_loss_mean
         
 
@@ -318,7 +333,7 @@ class MAML(object):
         return meta_val_loss, meta_train_loss, summary_str
 
 
-    def _single_test_step(self,dataset, num_tasks, task=None):
+    def _single_test_step(self,dataset, num_tasks, task=None ):
     
         batch_input, batch_target = dataset.get_test_batch(num_tasks=num_tasks, resample=True, task=task,
 
@@ -330,12 +345,14 @@ class MAML(object):
                      self._meta_train_y: batch_target[:, :self._K, :],
                      self._meta_val_x: batch_input[:, self._K:, :],
                      self._meta_val_y: batch_target[:, self._K:, :]}
-        meta_val_output, meta_val_loss, meta_train_loss = \
+        output_pre, val_loss_pre, meta_train_loss = \
             self._sess.run([self._meta_val_output, self._meta_val_loss,
                             self._meta_train_loss],
                            feed_dict)
+       
+        
 
-        return meta_val_output, meta_val_loss, meta_train_loss, batch_input, batch_target
+        return output_pre, val_loss_pre,  meta_train_loss, batch_input, batch_target
  
     def evaluate2(self, dataset, test_steps, draw, load_model=False,task_range=(0,7),**kwargs):
         '''

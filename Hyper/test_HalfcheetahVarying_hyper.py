@@ -33,7 +33,7 @@ class VG(VariantGenerator):
 
     @variant
     def task(self):
-        return ['train_meta']  # 'train_meta', 'train_pre', 'test_draw', 'test_no_draw'
+        return ['test_no_draw']  # 'train_meta', 'train_pre', 'test_draw', 'test_no_draw'
     
     @variant
     def seed(self):
@@ -46,13 +46,19 @@ env_name = 'HalfCheetahVaryingEnv-v0'
 # train prams
 task_range=(0.,0.5)        # range of task distribution during train
 max_epochs = 50              # num of itr during train
+num_tasks =32
+length_path =1000
 
 # test prams
-num_test_sample = 10    # num of task during test
-test_range =(0,0.5) # range of task distribution during test
-restore_dir ='../checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_100-shot_1-updates_10-batch_norm-batch_norm-EXP_test_pre1'
-length_path =1000
-num_tasks =32
+num_test_sample = 100    # num of task during test
+test_range =(0.0, 1.0) # range of task distribution during test
+
+restore_dir_list =[
+                'log-files/HalfCheetahVaryingEnv-v0/Jun-03_21:21:21Meta_Train_train_meta_KXX_up1_pa1_alXX_be0.01_batch500_LabExp1-修改了batch模式/Jun-03_21:21:21Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_32-shot_1-updates_500-batch_norm-batch_norm-EXP_Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1',
+                'log-files/HalfCheetahVaryingEnv-v0/Jun-03_21:21:21Meta_Train_train_meta_KXX_up1_pa1_alXX_be0.01_batch500_LabExp1-修改了batch模式/Jun-03_22:49:57Meta_Train_train_meta_K32_up1_pa1_al0.001_be0.01_batch500_LabExp1/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_32-shot_1-updates_500-batch_norm-batch_norm-EXP_Meta_Train_train_meta_K32_up1_pa1_al0.001_be0.01_batch500_LabExp1',
+                'log-files/HalfCheetahVaryingEnv-v0/Jun-03_21:21:21Meta_Train_train_meta_KXX_up1_pa1_alXX_be0.01_batch500_LabExp1-修改了batch模式/Jun-04_00:18:22Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_32-shot_1-updates_500-batch_norm-batch_norm-EXP_Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1',
+                'log-files/HalfCheetahVaryingEnv-v0/Jun-03_21:21:21Meta_Train_train_meta_KXX_up1_pa1_alXX_be0.01_batch500_LabExp1-修改了batch模式/Jun-04_01:44:08Meta_Train_train_meta_K32_up1_pa1_al0.001_be0.01_batch500_LabExp1/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_32-shot_1-updates_500-batch_norm-batch_norm-EXP_Meta_Train_train_meta_K32_up1_pa1_al0.001_be0.01_batch500_LabExp1'
+            ]
 
 variants = VG().variants()
 
@@ -69,6 +75,8 @@ for v in variants:
     alpha = v['alpha']              # learning rate for inner loop
     beta = v['beta']                # learning rate for mata update
     batch_size = v['batch_size']    # num of task
+
+    restore_dir = restore_dir_list[i-1]
     
     if v['task']=='train_meta':
         is_train = True

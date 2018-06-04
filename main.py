@@ -18,7 +18,7 @@ from dataset.Gymdata import dataset
 def argsparser():
 	parser = argparse.ArgumentParser("Tensorflow Implementation of MAML")
 	parser.add_argument('--seed', type=int, default=1)
-	parser.add_argument('--env_name', type=str, default='AntDisableEnv-v0')  # HalfCheetahEnvDisableEnv   HalfCheetahVaryingEnv
+	parser.add_argument('--env_name', type=str, default='HalfCheetahVaryingEnv-v0')  # HalfCheetahEnvDisableEnv   HalfCheetahVaryingEnv AntDisableEnv-v0
 	# Dataset
 	parser.add_argument('--dataset', help='environment ID', choices=['sin,gym'],default='gym',
 						required=False)
@@ -111,7 +111,7 @@ def main(args):
 				 task_range= (args.task_range_down,args.task_range_up),
 				 logdir = logdir
 				 )
-	if args.is_train:
+	if args.is_train and args.test_tpye is None:
 		model.learn(args.batch_size,  gym_dataset, args.max_epochs, is_PreTrain=args.is_PreTrain)
 
 
