@@ -36,7 +36,7 @@ class VG(VariantGenerator):
 exp_id = 1
 
 
-env_name = 'HalfCheetahEnvDisableEnv-v0'
+env_name = 'AntDisableEnv-v0'
 K = 32          # num of each batch during train model
 num_paths=1
 num_updates =1

@@ -51,7 +51,7 @@ class HalfCheetahEnvRandDisable(mujoco_env.MujocoEnv, utils.EzPickle):
         qvel = self.init_qvel + self.np_random.randn(self.model.nv) * .1
         self.set_state(qpos, qvel)
 
-        self.set_goal(reset_args=reset_args)
+        self.set_goal(reset_args=int(reset_args))
             
         return self._get_obs()
     

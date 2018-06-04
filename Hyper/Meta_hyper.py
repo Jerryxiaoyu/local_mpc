@@ -74,12 +74,12 @@ for v in variants:
         is_train = True
         is_PreTrain = False
         draw = False
-        test_tpye = None
+        test_tpye = 'train'
     elif v['task']=='train_pre':
         is_train = True
         is_PreTrain = True
         draw = False
-        test_tpye = None
+        test_tpye = 'train'
     elif v['task'] == 'test_draw':
         is_train = True
         is_PreTrain = False

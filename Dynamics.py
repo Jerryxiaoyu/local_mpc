@@ -14,10 +14,10 @@ SUMMARY_FREQ = 10
 SAVE_FREQ = 100
 EVAL_FREQ = 100
 
-
+T_EXP = 10
 class Dynamics(object):
-    def __init__(self, env,   NumOfExp,  model_type, loss_type, dim_input, dim_output,
-                  beta,  is_train,  norm,   task_Note='a',**kwargs
+    def __init__(self, env_name,   NumOfExp,  model_type, loss_type, dim_input, dim_output,
+                  beta,  max_epochs,is_train,  norm,   task_Note='a',**kwargs
                   ):
         '''
         model_tpye: choose model tpye for each task, choice: ('fc',)
@@ -37,11 +37,18 @@ class Dynamics(object):
         self._norm = norm
         self._dim_input = dim_input
         self._dim_output = dim_output
-       
+        
+        if env_name =='HalfCheetahEnvDisableEnv-v0' or env_name =='HalfCheetahVaryingEnv-v0':
+            self._traj_cost = self._traj_hc_cost
+        elif env_name =='AntDisableEnv-v0':
+            self._traj_cost = self._traj_ant_cost
+        else:
+            assert print('traj cost should be defined !')
+
         self.beta = beta
         self._avoid_second_derivative = False
         self._task_Note = task_Note
-        self._task_name = 'Dynamics.{}_gym-EXP_{}'.format(env,   self._task_Note)
+        self._task_name = 'Dynamics.{}_gym-EXP_{}'.format(env_name,   self._task_Note)
         log.infov('Task name: {}'.format(self._task_name))
 
         self._logdir = kwargs['logdir']
@@ -71,7 +78,10 @@ class Dynamics(object):
         # Initialize all variables
         log.infov("Initialize all variables")
         self._sess.run(tf.global_variables_initializer())
+        self.t_exp =0
+        self.max_epochs = max_epochs
 
+        
 
         print('weight[w1] ', self._weights['w1'].eval(session=self._sess))
         
@@ -134,26 +144,49 @@ class Dynamics(object):
         
         
         # Summary
-        self._pre_train_loss_sum = tf.summary.scalar('loss/pre_train_loss', self._meta_train_loss)
+        self._pre_train_loss_sum = tf.summary.scalar('loss/meta_train_loss', self._meta_train_loss)
+        
         self._summary_op = tf.summary.merge_all()
 
-    def update(self, experiences=None):
+    def update(self,  experiences=None):
         
         if  len(experiences) == self._LenOfExp:
             data = np.array(experiences).reshape((self._LenOfExp, -1))
             
-            data_x = data[:, : self._dim_input]
-            data_y = data[:, self._dim_input : ]
+            # data_new  = data [np.newaxis, :]
+            # if self.t_exp < T_EXP:
+            #     if self.t_exp == 0:
+            #         self.exp_dataset = data_new
+            #     else:
+            #         self.exp_dataset = np.concatenate([self.exp_dataset, data_new], axis=0)
+            #
+            #     self.t_exp += 1
+            # elif self.t_exp == T_EXP:
+            #     self.exp_dataset = np.concatenate([self.exp_dataset, data_new], axis=0)
+            #     self.exp_dataset = self.exp_dataset[1:]
+
+            
     
-            feed_dict = {self._meta_train_x: data_x,
-                         self._meta_train_y: data_y,
-                         }
-    
-           # print('pre \nweight[w1] ', self._weights['w1'].eval(session=self._sess))
-            _, summary_str, meta_train_loss = \
-                self._sess.run([self._meta_train_op, self._summary_op, self._meta_train_loss,], feed_dict)
+            
+            # dataset_tf = tf.data.Dataset.from_tensor_slices((data_x, data_y)).shuffle(buffer_size=10000).batch(batch_size =32).repeat()
+            # iter = dataset_tf.make_one_shot_iterator()
+            # train_loader = iter.get_next()
+            for epoch in range(self.max_epochs):
+                np.random.shuffle(data)
+                batch_x = data[:, : self._dim_input]
+                batch_y = data[:, self._dim_input:]
+                #(batch_x, batch_y)= self._sess.run(train_loader)
+                
+                feed_dict = {self._meta_train_x: batch_x,
+                             self._meta_train_y: batch_y,
+                             }
+                # print('pre \nweight[w1] ', self._weights['w1'].eval(session=self._sess))
+                _, summary_str, meta_train_loss = \
+                    self._sess.run([self._meta_train_op, self._summary_op, self._meta_train_loss,], feed_dict)
+
+            self._writer.add_summary(summary_str)
             return meta_train_loss
-       # print('post \nweight[w1] ', self._weights['w1'].eval(session=self._sess))
+                # print('post \nweight[w1] ', self._weights['w1'].eval(session=self._sess))
         
 
     def predict(self, state, action):
@@ -177,9 +210,8 @@ class Dynamics(object):
         return next_states, cost
 
     
-    def _traj_cost( self, tf_x, tf_y, weights=1.0, scope=None):
-    
-        
+    def _traj_hc_cost( self, tf_x, tf_y, weights=1.0, scope=None):
+
         c_x = tf_x
         c_y = tf.add(tf_y, c_x[:, :self._dim_output])
     
@@ -187,4 +219,15 @@ class Dynamics(object):
         n1 = tf.multiply(tf.constant(0.1), tf.reduce_sum(tf.pow(action, 2), axis=1))
         n2 = tf.div(tf.subtract(c_y[:, 17], c_x[:, 17]), tf.constant(-0.01))
         cost  =  tf.add(n1, n2)
+        return cost
+
+    def _traj_ant_cost(self, tf_x, tf_y, weights=1.0, scope=None):
+    
+        c_x = tf_x
+        c_y = tf.add(tf_y, c_x[:, :self._dim_output])
+    
+        action = c_x[:, self._dim_output:]  # 20:
+        n1 = tf.multiply(tf.constant(0.005), tf.reduce_sum(tf.pow(action, 2), axis=1))
+        n2 = tf.div(tf.subtract(c_y[:, 27], c_x[:, 27]), tf.constant(-0.01))
+        cost = tf.add(tf.add(n1, n2),tf.constant(0.05))
         return cost

@@ -48,7 +48,7 @@ def argsparser():
 	parser.add_argument('--restore_dir', type=str ,default='log-files/HalfCheetahVaryingEnv-v0/May-30_21:27:35Train_Model_EXP03/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_64-shot_5-updates_500-batch_norm-batch_norm-EXP_Train_Model_EXP03')
 	parser.add_argument('--num_test_sample', type=int, default=10)
 	parser.add_argument('--draw',   type=ast.literal_eval,default=False)
-	parser.add_argument('--test_tpye', type=str, default=None)  # None 'draw'
+	parser.add_argument('--test_tpye', type=str, default='train')  # None 'draw'
 	parser.add_argument('--test_range_up', type=float, default=3)
 	parser.add_argument('--test_range_down', type=float, default=0.1)
 
@@ -111,17 +111,18 @@ def main(args):
 				 task_range= (args.task_range_down,args.task_range_up),
 				 logdir = logdir
 				 )
-	if args.is_train and args.test_tpye is None:
-		model.learn(args.batch_size,  gym_dataset, args.max_epochs, is_PreTrain=args.is_PreTrain)
+	if args.is_train :
+		if args.test_tpye == 'train':
+			model.learn(args.batch_size,  gym_dataset, args.max_epochs, is_PreTrain=args.is_PreTrain)
 
 
 	
-	if args.test_tpye is not None:
-		if args.test_tpye == 'draw':
-			model.evaluate(gym_dataset, args.num_test_sample, args.draw, load_model=True,
-						   task_range=(args.test_range_down, args.test_range_up),
-						   restore_checkpoint=args.restore_checkpoint,
-						   restore_dir=args.restore_dir)
+	
+	if args.test_tpye == 'draw':
+		model.evaluate(gym_dataset, args.num_test_sample, args.draw, load_model=True,
+					   task_range=(args.test_range_down, args.test_range_up),
+					   restore_checkpoint=args.restore_checkpoint,
+					   restore_dir=args.restore_dir)
 
 
 if __name__ == '__main__':

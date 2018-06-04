@@ -20,7 +20,7 @@ def argsparser():
     parser = argparse.ArgumentParser("Tensorflow Implementation of MAML")
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--env_name', type=str,
-                        default='HalfCheetahVaryingEnv-v0')  # HalfCheetahEnvDisableEnv   HalfCheetahVaryingEnv
+                        default='HalfCheetahEnvDisableEnv-v0')  # HalfCheetahEnvDisableEnv   HalfCheetahVaryingEnv
     # Dataset
     parser.add_argument('--dataset', help='environment ID', choices=['sin,gym'], default='gym',
                         required=False)
@@ -34,20 +34,22 @@ def argsparser():
     # Train
     parser.add_argument('--is_train', action='store_true', default=True)
     
-    parser.add_argument('--beta', type=float, default=0.001)  # learning rate for new taks during update
+    parser.add_argument('--beta', type=float, default=0.01)  # learning rate for new taks during update
+    parser.add_argument('--max_epochs', type=int, default=5)  # for update_training using experience
+    
     # Test
     parser.add_argument('--restore_checkpoint', type=str)
     parser.add_argument('--restore_dir', type=str,
-                        default='Hyper/log-files/HalfCheetahVaryingEnv-v0/Jun-03_18:39:46Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1/checkpoint/MAML.HalfCheetahVaryingEnv-v0_gym_32-shot_1-updates_500-batch_norm-batch_norm-EXP_Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1')
+                        default='Hyper/log-files/HalfCheetahEnvDisableEnv-v0/Jun-03_21:18:39Meta_Train_train_meta_KXX_alXX_LabExp1/Jun-03_21:18:39Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1/checkpoint/MAML.HalfCheetahEnvDisableEnv-v0_gym_32-shot_1-updates_500-batch_norm-batch_norm-EXP_Meta_Train_train_meta_K32_up1_pa1_al0.01_be0.01_batch500_LabExp1')
 
     parser.add_argument('--NumOfExp', type=int, default=32)
     parser.add_argument('--horizon',  type=int, default=1000)
     parser.add_argument('--num_itr', type=int, default=5)
-    parser.add_argument('--task_goal', type=float, default=1.0)
+    parser.add_argument('--task_goal', type=float, default=5)
     
     # MPC Controller
-    parser.add_argument('--mpc_horizon', '-m', type=int, default=5)  # mpc simulation H  10
-    parser.add_argument('--simulated_paths', '-sp', type=int, default=1000)  # mpc  candidate  K 10000
+    parser.add_argument('--mpc_horizon', '-m', type=int, default=10)  # mpc simulation H  10
+    parser.add_argument('--simulated_paths', '-sp', type=int, default=5000)  # mpc  candidate  K 10000
     
     parser.add_argument('--note', type=str, default='Control_MPC_EXP02')
     args = parser.parse_args()
@@ -130,7 +132,7 @@ def rollout(env,
     runtime1 = end - start
     
     
-    return sum(rewards)/horizon, sum(meta_train_losses)/horizon
+    return sum(rewards), sum(meta_train_losses)/horizon
 
  
 def main(args):
@@ -171,6 +173,7 @@ def main(args):
                  dim_input,
                  dim_output,
                  beta = args.beta,#args.beta,
+                 max_epochs=args.max_epochs,
                  is_train =args.is_train,
                  norm = args.norm,
                  task_Note=args.note,
@@ -191,15 +194,15 @@ def main(args):
     experiences,costs =[],[]
     print('MPC is beginning...' )
     for itr in range(num_itr):
-        cost, model_loss_mean = rollout(env, mpc_controller, task_goal = args.task_goal,
+        reward, model_loss_mean = rollout(env, mpc_controller, task_goal = args.task_goal,
                        dyn_model=dyn_model,experiences=experiences, NumOfExp= args.NumOfExp,horizon=args.horizon, cost_fn=cheetah_cost_fn,
                 render=False, verbose=False, save_video=False, ignore_done=True, )
         
         #print(time.asctime( time.localtime(time.time()) ), ' itr :', itr, 'Average reward :' , cost)
-        log.infov("Itr {}/{} Average cost: {:.4f}  Model loss mean:{:.4f}".format(itr, num_itr,cost, model_loss_mean))
+        log.infov("Itr {}/{} Accumulated Reward: {:.4f}  Model loss mean:{:.4f}".format(itr, num_itr,reward, model_loss_mean))
 
         logger.log({'itr': itr,
-                    'Average cost': cost,
+                    'Accumulated Reward': reward,
                     'Model loss mean': model_loss_mean,
                     })
     

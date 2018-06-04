@@ -9,6 +9,8 @@ CONFIG = {
 
 
 def construct_weights(dim_input, dim_output):
+    print('dim_hidden',CONFIG['dim_hidden'] )
+    print('num_hidden_layers',CONFIG['num_hidden_layers'])
     weights = {}
     weights['w1'] = tf.Variable(tf.truncated_normal([dim_input, CONFIG['dim_hidden']], stddev=0.01))
     weights['b1'] = tf.Variable(tf.zeros([CONFIG['dim_hidden']]))
